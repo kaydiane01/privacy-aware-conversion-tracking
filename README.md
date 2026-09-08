@@ -17,13 +17,25 @@ Most marketing sites fire tracking scripts the moment a page loads, often before
 
 All of the above is unit tested with [Vitest](https://vitest.dev/).
 
+## Architecture
+
+```mermaid
+flowchart TD
+    A[UTM params<br/>Parsed & persisted from URL] --> B[Consent gate<br/>granted / denied / undecided]
+    B --> C[Conversion event<br/>Typed, unique event_id]
+    C --> D[Browser console log<br/>Dev-only visibility]
+    C --> E[Server API route<br/>/api/track validates & logs]
+    E --> F[Ad platform adapters<br/>Meta + Google mock, with retry]
+```
+
 ## Roadmap
 
-- [ ] Wire event creation into consent-gated tracking calls (events are defined but not yet dispatched anywhere)
-- [ ] Browser + server conversion events sharing a common `event_id`, for deduplication
-- [ ] Mock Meta CAPI / Google Enhanced Conversions adapters
-- [ ] Retry and failure handling for event delivery
-- [ ] Architecture diagram and demo GIF
+- [x] Wire event creation into consent-gated tracking calls
+- [x] Browser + server conversion events sharing a common `event_id`, for deduplication
+- [x] Mock Meta CAPI / Google Enhanced Conversions adapters
+- [x] Retry and failure handling for event delivery
+- [x] Architecture diagram
+- [ ] Demo GIF
 
 ## Getting started
 
