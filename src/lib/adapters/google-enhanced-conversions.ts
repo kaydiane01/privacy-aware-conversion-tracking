@@ -1,5 +1,7 @@
 import type { ConversionEvent, ConversionEventType } from "@/lib/events";
-import type { AdapterResult } from "@/lib/adapters/types";
+import type { AdapterOptions, AdapterResult } from "@/lib/adapters/types";
+import { DEFAULT_RETRY_CONFIG, withRetry } from "@/lib/adapters/retry";
+import { randomDeliveryOutcome } from "@/lib/adapters/simulate-delivery";
 
 const MOCK_CUSTOMER_ID = "123-456-7890";
 
@@ -71,14 +73,18 @@ function buildGoogleConversion(event: ConversionEvent, conversionAction: string)
 
 /**
  * Simulates a call to the Google Ads API's
- * `ConversionUploadService.UploadClickConversions`. Skips (rather than
- * fails) event types with no configured conversion action — that's
- * expected here, not an error, per the note on `CONVERSION_ACTIONS` above.
- * Otherwise logs the request Google would actually receive and reports
- * success; there's no real HTTP call, so nothing can fail yet.
+ * `ConversionUploadService.UploadClickConversions`, retrying on a
+ * simulated failure per `withRetry`'s policy. Skips (rather than fails,
+ * and without retrying — there's no send to retry) event types with no
+ * configured conversion action, per the note on `CONVERSION_ACTIONS`
+ * above. Otherwise every attempt logs the request Google would actually
+ * receive, and `simulateOutcome` (random by default; see
+ * `simulate-delivery.ts`) decides whether that attempt is treated as
+ * accepted or as a transient platform error.
  */
 export async function sendToGoogleEnhancedConversions(
   event: ConversionEvent,
+  options: AdapterOptions = {},
 ): Promise<AdapterResult> {
   const conversionAction = CONVERSION_ACTIONS[event.type];
   if (!conversionAction) {
@@ -88,12 +94,29 @@ export async function sendToGoogleEnhancedConversions(
     return { platform: "google", success: true, event_id: event.event_id };
   }
 
+  const simulateOutcome = options.simulateOutcome ?? randomDeliveryOutcome;
   const payload = { conversions: [buildGoogleConversion(event, conversionAction)] };
 
-  console.log(
-    `[google-enhanced-conversions] POST https://googleads.googleapis.com/v18/customers/${MOCK_CUSTOMER_ID}:uploadClickConversions`,
-    JSON.stringify(payload, null, 2),
-  );
+  return withRetry(
+    "google",
+    event.event_id,
+    async (attemptNumber) => {
+      console.log(
+        `[google-enhanced-conversions] attempt ${attemptNumber}: POST https://googleads.googleapis.com/v18/customers/${MOCK_CUSTOMER_ID}:uploadClickConversions`,
+        JSON.stringify(payload, null, 2),
+      );
 
-  return { platform: "google", success: true, event_id: event.event_id };
+      const outcome = simulateOutcome();
+      if (!outcome.success) {
+        return {
+          platform: "google",
+          success: false,
+          event_id: event.event_id,
+          error: outcome.error ?? "simulated delivery failure",
+        };
+      }
+      return { platform: "google", success: true, event_id: event.event_id };
+    },
+    options.retryConfig ?? DEFAULT_RETRY_CONFIG,
+  );
 }

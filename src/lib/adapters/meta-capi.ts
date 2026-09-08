@@ -1,5 +1,7 @@
 import type { ConversionEvent, ConversionEventType } from "@/lib/events";
-import type { AdapterResult } from "@/lib/adapters/types";
+import type { AdapterOptions, AdapterResult } from "@/lib/adapters/types";
+import { DEFAULT_RETRY_CONFIG, withRetry } from "@/lib/adapters/retry";
+import { randomDeliveryOutcome } from "@/lib/adapters/simulate-delivery";
 
 /**
  * Stand-ins for the config a real integration would pull from env/ad-account
@@ -77,20 +79,40 @@ function buildMetaPayload(event: ConversionEvent) {
 }
 
 /**
- * Simulates `POST /{pixel_id}/events`. Logs the request Meta would
- * actually receive and reports success — there's no real HTTP call here,
- * so nothing can fail yet, but the result shape mirrors what a real call
- * site (retry logic, delivery alerting) would need either way.
+ * Simulates `POST /{pixel_id}/events`, retrying on a simulated failure per
+ * `withRetry`'s policy. Every attempt logs the request Meta would actually
+ * receive — a real client sends the payload on each attempt regardless of
+ * whether the previous one failed — and `simulateOutcome` (random by
+ * default; see `simulate-delivery.ts`) decides whether that attempt is
+ * treated as accepted or as a transient platform error.
  */
 export async function sendToMetaCapi(
   event: ConversionEvent,
+  options: AdapterOptions = {},
 ): Promise<AdapterResult> {
+  const simulateOutcome = options.simulateOutcome ?? randomDeliveryOutcome;
   const payload = buildMetaPayload(event);
 
-  console.log(
-    `[meta-capi] POST https://graph.facebook.com/${META_API_VERSION}/${MOCK_PIXEL_ID}/events?access_token=${MOCK_ACCESS_TOKEN}`,
-    JSON.stringify(payload, null, 2),
-  );
+  return withRetry(
+    "meta",
+    event.event_id,
+    async (attemptNumber) => {
+      console.log(
+        `[meta-capi] attempt ${attemptNumber}: POST https://graph.facebook.com/${META_API_VERSION}/${MOCK_PIXEL_ID}/events?access_token=${MOCK_ACCESS_TOKEN}`,
+        JSON.stringify(payload, null, 2),
+      );
 
-  return { platform: "meta", success: true, event_id: event.event_id };
+      const outcome = simulateOutcome();
+      if (!outcome.success) {
+        return {
+          platform: "meta",
+          success: false,
+          event_id: event.event_id,
+          error: outcome.error ?? "simulated delivery failure",
+        };
+      }
+      return { platform: "meta", success: true, event_id: event.event_id };
+    },
+    options.retryConfig ?? DEFAULT_RETRY_CONFIG,
+  );
 }
