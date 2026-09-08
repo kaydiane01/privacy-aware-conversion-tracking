@@ -2,7 +2,11 @@
 
 A consent-aware conversion tracking starter kit built with Next.js and TypeScript. This project explores how to capture, gate, and structure marketing attribution data (UTM parameters, conversion events) in a way that respects user consent by default — nothing is tracked until a visitor explicitly opts in.
 
-**Status: work in progress.** This is being built incrementally as a portfolio project; the roadmap below tracks what's done and what's next.
+## Demo
+
+https://github.com/kaydiane01/privacy-aware-conversion-tracking/issues/1
+
+**Status: complete.** All planned features for this project are built, tested, and documented — see the roadmap below.
 
 ## Why this exists
 
@@ -28,14 +32,14 @@ flowchart TD
     E --> F[Ad platform adapters<br/>Meta + Google mock, with retry]
 ```
 
-## Roadmap
+## Development history
 
 - [x] Wire event creation into consent-gated tracking calls
 - [x] Browser + server conversion events sharing a common `event_id`, for deduplication
 - [x] Mock Meta CAPI / Google Enhanced Conversions adapters
 - [x] Retry and failure handling for event delivery
 - [x] Architecture diagram
-- [ ] Demo GIF
+- [x] Demo GIF
 
 ## Getting started
 
