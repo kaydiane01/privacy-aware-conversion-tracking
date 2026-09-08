@@ -12,8 +12,10 @@ import { createConversionEvent } from "@/lib/events";
  *
  * A non-empty result means this page view is attributed to a campaign
  * (whether freshly captured from the URL or carried over from an earlier
- * visit), so it also builds a `campaign_landing` event. Sending isn't wired
- * up yet, so it's only logged for now.
+ * visit), so it also builds a `campaign_landing` event — logged to the
+ * console as a stand-in for a real browser-side send, and also POSTed to
+ * `/api/track` for a simulated server-side send. Both sides log the same
+ * `event_id` so a later dedup check can confirm they're the same event.
  */
 export function UtmCapture() {
   const [consent] = useConsentStatus();
@@ -28,6 +30,15 @@ export function UtmCapture() {
           utm,
         );
         console.log(event);
+
+        fetch("/api/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(event),
+          keepalive: true,
+        }).catch((error) => {
+          console.error("Failed to send conversion event to server:", error);
+        });
       }
     }
   }, [consent]);
